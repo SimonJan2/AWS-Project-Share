@@ -1,0 +1,296 @@
+# Creation of VPC with Subnets, IGW, Route Table Associations for CloudFormation
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC with Subnets, IGW, Route Table Associations
+
+#----------------------- Parameters -----------------------#
+
+# This parameter defines the CIDR block for the VPC
+Parameters:
+  VPCCidrBlock:
+    Type: String
+    Description: CIDR block (IPv4) for the VPC (x.x.x.x/y)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # This parameter allows only CIDR block in the form of x.x.x.x/y
+    ConstraintDescription: must be a valid IPv4 CIDR range
+    Default: 10.0.0.0/16
+  
+  Public1SubnetCidr:
+    Type: String
+    Description: CIDR block (IPv4) for the public 1 subnet (x.x.x.x/y)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # This parameter allows only CIDR block in the form of x.x.x.x/y
+    ConstraintDescription: must be a valid IPv4 CIDR range
+    Default: 10.0.1.0/24
+  
+  Private1SubnetCidr:
+    Type: String
+    Description: CIDR block (IPv4) for the private 10 subnet (x.x.x.x/y)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # This parameter allows only CIDR block in the form of x.x.x.x/y
+    ConstraintDescription: must be a valid IPv4 CIDR range
+    Default: 10.0.10.0/24
+  
+  Public2SubnetCidr:
+    Type: String
+    Description: CIDR block (IPv4) for the public 2 subnet (x.x.x.x/y)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # This parameter allows only CIDR block in the form of x.x.x.x/y
+    ConstraintDescription: must be a valid IPv4 CIDR range
+    Default: 10.0.2.0/24
+  
+  Private2SubnetCidr:
+    Type: String
+    Description: CIDR block (IPv4) for the private 20 subnet (x.x.x.x/y)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # This parameter allows only CIDR block in the form of x.x.x.x/y
+    ConstraintDescription: must be a valid IPv4 CIDR range
+    Default: 10.0.20.0/24
+
+#------------------------- Resources -------------------------#
+
+Resources:
+
+#========== VPC creation ==========#
+
+  VPC:
+    Type: AWS::EC2::VPC  # This is an AWS resource type for a Virtual Private Cloud
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      # This property enables DNS resolution within the VPC
+      EnableDnsSupport: 'true'
+      # This property enables DNS hostnames within the VPC
+      EnableDnsHostnames: 'true'
+      # The default tenancy option is 'default'
+      InstanceTenancy: default
+      # This sets a tag with a key of 'Name' and the value of 'Ilan-VPC'
+      Tags:
+      - Key: Name
+        Value: Rashbag-VPC
+
+#========== Subnets creation ==========#
+
+  # This is the public 1 10.0.1.0/24
+  Public1Subnet:
+    Type: AWS::EC2::Subnet # This is an AWS resource type for a Subnet
+    Properties:
+      CidrBlock: !Ref Public1SubnetCidr # This is the IP address range for the Subnet
+      VpcId: !Ref VPC # This links the Subnet to the VPC
+      MapPublicIpOnLaunch: true # This enables auto-assignment of IPv4 addresses
+      AvailabilityZone: us-east-1a # This is the Availability Zone
+      Tags: # This sets a tag with a key of 'Name' and the value of 'public 1 - us-east-1a - 10.0.1.0/24'
+      - Key: Name
+        Value: !Join [ " - ", ["public 1", "us-east-1a", !Ref Public1SubnetCidr] ] # This is the name of the subnet
+  
+  # This is the private 1 10.0.10.0/24
+  Private1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref Private1SubnetCidr
+      VpcId: !Ref VPC
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Join [ " - ", [ "private 10", "us-east-1a", !Ref Private1SubnetCidr ] ]
+
+  # This is the public 2 x.x.x.x/y subnet
+  Public2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref Public2SubnetCidr
+      VpcId: !Ref VPC
+      AvailabilityZone: us-east-1b
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Join [ " - ", ["public 2", "us-east-1b", !Ref Public2SubnetCidr] ]
+
+  # This is the private 2 x.x.x.x/y subnet
+  Private2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref Private2SubnetCidr
+      VpcId: !Ref VPC
+      AvailabilityZone: us-east-1b
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Join [ " - ", [ "private 20", "us-east-1b", !Ref Private2SubnetCidr ] ]
+
+#========== Public Route Table Settings ==========#
+
+  # Public route table
+  PublicRT:
+    Type: AWS::EC2::RouteTable # This is an AWS resource type for a Route Table
+    Properties:
+      VpcId: !Ref VPC # This links the Route Table to the VPC
+      Tags:
+      - Key: Name
+        Value: Public-RT # This sets a tag with a key of 'Name' and the value of 'Public-RT'
+
+  # Public RT association 1
+  PublicRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation # This is an AWS resource type for a Subnet Route Table Association
+    Properties:
+      RouteTableId: !Ref PublicRT # This links the Subnet Route Table Association to the Route Table
+      SubnetId: !Ref Public1Subnet # This links the Subnet Route Table Association to the Subnet
+
+  # Public RT association 2
+  PublicRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRT
+      SubnetId: !Ref Public2Subnet 
+
+#========== Private Route Table Settings ==========#
+
+  # Private RT creation
+  PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: Private-RT
+
+  # Private RT association 1
+  PrivateRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRT
+      SubnetId: !Ref Private1Subnet
+    DependsOn: PublicRouteTableAssociation1
+  
+  # Private RT association 2
+  PrivateRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRT
+      SubnetId: !Ref Private2Subnet
+
+#------------------------- Internet Gateway -------------------------#
+
+  # IGW creation
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway # This is an AWS resource type for an Internet Gateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Rashbag-IGW # This sets a tag with a key of 'Name' and the value of 'Ilan-IGW'
+
+  # IGW association to VPC
+  InternetGatewayAssociation:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    DependsOn: InternetGateway
+
+  # Route to IGW
+  Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: InternetGatewayAssociation
+
+#------------------------- Security Groups -------------------------#
+
+  # Security Group in VPC for instances in Public Subnets
+  PublicSubnetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for instances in Public Subnet
+      VpcId: !Ref VPC
+      GroupName: PublicSubnetSecurityGroup # Name for the security group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80 # HTTP
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443 # HTTPS
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22 # SSH
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1 # ICMP (ping)
+      Tags:
+        - Key: Name
+          Value: PublicSubnetSecurityGroup # Name tag for the security group
+
+  # Security Group for instances in Private Subnet
+  PrivateSubnetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for instances in Private Subnet
+      VpcId: !Ref VPC
+      GroupName: PrivateSubnetSecurityGroup # Name for the security group
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80 # HTTP
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443 # HTTPS
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22 # SSH
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1 # ICMP (ping)
+      Tags:
+        - Key: Name
+          Value: PrivateSubnetSecurityGroup # Name tag for the security group
+      
+
+#------------------------- Endpoints -------------------------#
+
+# Endpoint for accessing Amazon S3 with a Name tag
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Gateway
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      PolicyDocument:
+        Version: "2008-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "*"
+            Resource: "*"
+      RouteTableIds:
+        - !Ref PrivateRT
+      #tags:
+      #  - Key: Name
+      #    Value: S3GatewayEndpoint  
+
+  MyInstanceConnectEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Properties:
+      PreserveClientIp: false  # Set to true to preserve the client's IP address when establishing an instance connection
+      SecurityGroupIds: 
+        - !GetAtt PrivateSubnetSecurityGroup.GroupId  # Replace with your security group ID(s)
+      SubnetId: !Ref Private1Subnet  # Only one subnet ID is allowed per instance connect endpoint
+      Tags: 
+        - Key: Name
+          Value: MyInstanceConnectEndpoint
+
+
+
+
+
+
+# add name of AWS Service endpoint to S3 is "com.amazonaws.us-east-1.s3" as gateway
+# add EC2 instance connect Endpoint
+
+
+
+

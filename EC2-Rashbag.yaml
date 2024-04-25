@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch an EC2 instance in the free tier 
+#-------------------------- Parameters --------------------------#
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  VpcId:
+    Description: ID of the VPC where the instance should be launched
+    Type: AWS::EC2::VPC::Id
+  
+  SubnetIdRashbagWebServer1:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SubnetIdRashbagWebServer2:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+
+  SubnetIdRashbagprivate1:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id  
+  
+  SubnetIdRashbagprivate2:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SecurityGroupIdPublic:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SecurityGroupIdPrivate:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+
+#-------------------------- Resources --------------------------#
+Resources:
+
+  #________ IAM Roles _________#
+  S3FullAccessRoleForEC2:  # New IAM role definition (assuming not created yet)
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: S3FullAccessRoleForEC2
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3FullAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - '*'
+
+  #________ Instance Profile _________#
+
+  S3FullAccessInstanceProfile:  # New resource for instance profile
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - S3FullAccessRoleForEC2  # Reference the created IAM role
+    DependsOn: S3FullAccessRoleForEC2  # This ensures role is created first
+
+
+
+  #________ EC2 Instances _________#
+  WebServerInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPublic
+          SubnetId: !Ref SubnetIdRashbagWebServer1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Use this for your user data (script from top to bottom)
+          # install httpd (Linux 2 version)
+          yum update -y
+          yum install git -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          cd /var/www/html/
+          git clone "https://github.com/LiorTr/crypto.git"
+          mv -f ./crypto/* .
+          rm -rf crypto
+      Tags:
+        - Key: Name
+          Value: "Rashbag-WebServer-1"
+    
+  WebServerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPublic
+          SubnetId: !Ref SubnetIdRashbagWebServer2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Use this for your user data (script from top to bottom)
+          # install httpd (Linux 2 version)
+          yum update -y
+          yum install git -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          cd /var/www/html/
+          git clone "https://github.com/LiorTr/crypto.git"
+          mv -f ./crypto/* .
+          rm -rf crypto
+      Tags:
+        - Key: Name
+          Value: "Rashbag-WebServer-2"
+
+  PrivateInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref S3FullAccessInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate
+          SubnetId: !Ref SubnetIdRashbagprivate1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Create a new S3 bucket
+          aws s3 mb s3://rashbag-ec2
+          # Create a file with the content "hello world"
+          echo "hello world" > rashbag.txt
+          # Upload the file to the new bucket
+          aws s3 cp rashbag.txt s3://rashbag-ec2/
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-1"
+
+  PrivateInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate
+          SubnetId: !Ref SubnetIdRashbagprivate2
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-2"
+      
+#-------------------------- Outputs --------------------------#
+Outputs:
+  WebServerInstance1Id:
+    Description: The instance ID of the first web server
+    Value: !Ref WebServerInstance1
+  WebServerInstance1PublicIP:
+    Description: The public IP address of the first web server
+    Value: !GetAtt WebServerInstance1.PublicIp
+
+  WebServerInstance2Id:
+    Description: The instance ID of the second web server
+    Value: !Ref WebServerInstance2
+  WebServerInstance2PublicIP:
+    Description: The public IP address of the second web server
+    Value: !GetAtt WebServerInstance2.PublicIp
+
+  PrivateInstance1Id:
+    Description: The instance ID of the first private instance
+    Value: !Ref PrivateInstance1
+
+  PrivateInstance2Id:
+    Description: The instance ID of the second private instance
+    Value: !Ref PrivateInstance2

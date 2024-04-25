@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM users and groups for Global, EC2, S3
+
+#-------------------------- Parameters --------------------------#
+
+Parameters:
+  GlobalAdmin:
+    Description: Username of the Global Admin
+    Type: String
+    Default: GlobalAdmin
+
+  EC2Admin:
+    Description: Username of the EC2 Admin
+    Type: String
+    Default: EC2Admin
+
+  S3Admin:
+    Description: Username of the S3 Admin
+    Type: String
+    Default: S3Admin
+
+  InitialPassword:
+    Description: Initial password for the IAM user (User needs to change it at next login)
+    Type: String
+    Default: Password123!
+    NoEcho: true
+    ConstraintDescription: Must reset password at next login
+
+#-------------------------- Resources --------------------------#
+
+Resources:
+  
+  #________ IAM Groups _________#
+  
+  GlobalAdminsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Global-Admins
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  EC2AdminsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: EC2-Admins
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+
+  S3AdminsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: S3-Admins
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  #________ IAM Users _________#
+
+  GlobalAdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref GlobalAdmin
+      Groups:
+        - !Ref GlobalAdminsGroup
+      LoginProfile:
+        Password: !Ref InitialPassword
+        PasswordResetRequired: true
+
+  EC2AdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref EC2Admin
+      Groups:
+        - !Ref EC2AdminsGroup
+      LoginProfile:
+        Password: !Ref InitialPassword
+        PasswordResetRequired: true
+
+  S3AdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref S3Admin
+      Groups:
+        - !Ref S3AdminsGroup
+      LoginProfile:
+        Password: !Ref InitialPassword
+        PasswordResetRequired: true
+
+
+#________ IAM For Lambda Role _________#
+
+  S3FullAccessRoleForLambda:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: S3FullAccessRoleLambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+
+#-------------------------- Outputs --------------------------#
+
+Outputs:
+  GlobalAdminUserARN:
+    Description: ARN of the Global Admin user
+    Value: !GetAtt GlobalAdminUser.Arn
+  EC2AdminUserARN:
+    Description: ARN of the EC2 Admin user
+    Value: !GetAtt EC2AdminUser.Arn
+  S3AdminUserARN:
+    Description: ARN of the S3 Admin user
+    Value: !GetAtt S3AdminUser.Arn
