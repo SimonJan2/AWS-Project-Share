@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch an EC2 instance in the free tier 
+#-------------------------- Parameters --------------------------#
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  VpcId:
+    Description: ID of the VPC where the instance should be launched
+    Type: AWS::EC2::VPC::Id
+  
+  SubnetIdRashbagWebServer1:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SubnetIdRashbagWebServer2:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+
+  SubnetIdRashbagprivate1:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id  
+  
+  SubnetIdRashbagprivate2:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SecurityGroupIdPublic:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SecurityGroupIdPrivate:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+#-------------------------- Resources --------------------------#
+Resources:
+
+  #________ IAM Roles _________#
+  S3FullAccessRoleForEC2:  # New IAM role definition (assuming not created yet)
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: S3FullAccessRoleForEC2
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3FullAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - '*'
+
+  #________ Instance Profile _________#
+
+  S3FullAccessInstanceProfile:  # New resource for instance profile
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - S3FullAccessRoleForEC2  # Reference the created IAM role
+    DependsOn: S3FullAccessRoleForEC2  # This ensures role is created first
+
+  # Application Load Balancer Resources
+  WebServerALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref SecurityGroupIdPublic
+      Subnets:
+        - !Ref SubnetIdRashbagWebServer1
+        - !Ref SubnetIdRashbagWebServer2
+
+  WebServerALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebServerALBTargetGroup
+      LoadBalancerArn: !Ref WebServerALB
+      Port: 80
+      Protocol: HTTP
+
+  WebServerALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckPath: /
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref VpcId
+
+  # Auto Scaling Group Resources
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref SubnetIdRashbagWebServer1
+        - !Ref SubnetIdRashbagWebServer2
+      LaunchConfigurationName: !Ref WebServerLaunchConfiguration
+      MinSize: 2
+      MaxSize: 4
+      TargetGroupARNs:
+        - !Ref WebServerALBTargetGroup
+
+  WebServerLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+        - !Ref SecurityGroupIdPublic
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install git -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          cd /var/www/html/
+          git clone "https://github.com/LiorTr/crypto.git"
+          mv -f ./crypto/* .
+          rm -rf crypto
+
+  WebServerASGCPUPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref WebServerASG
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50.0
+
+  WebServerASGCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm monitoring CPU utilization on EC2 instances
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerASG
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref WebServerASGCPUPolicy
+
+  #________ EC2 Instances _________#
+  PrivateInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref S3FullAccessInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate
+          SubnetId: !Ref SubnetIdRashbagprivate1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Create a new S3 bucket
+          BUCKET_NAME="rashbag-ec2"
+          aws s3 mb s3://$BUCKET_NAME
+          # Create a file with the content "hello world"
+          echo "hello world" > rashbag.txt
+          # Upload the file to the new bucket
+          aws s3 cp rashbag.txt s3://$BUCKET_NAME/
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-1"
+
+  PrivateInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate
+          SubnetId: !Ref SubnetIdRashbagprivate2
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-2"
+
+#-------------------------- Outputs --------------------------#
+Outputs:
+  WebServerALBDNSName:
+    Description: The DNS name of the Application Load Balancer
+    Value: !GetAtt WebServerALB.DNSName
+
+  PrivateInstance1Id:
+    Description: The instance ID of the first private instance
+    Value: !Ref PrivateInstance1
+
+  PrivateInstance2Id:
+    Description: The instance ID of the second private instance
+    Value: !Ref PrivateInstance2
