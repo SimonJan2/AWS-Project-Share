@@ -38,37 +38,50 @@ Parameters:
 Resources:
 
   #________ IAM Roles _________#
+  # IAM Role for granting EC2 instances full access to S3
+  # -----------------------------------------------------
+  # This IAM role allows EC2 instances to have full access to
+  # S3 resources. The role is assumed by EC2 instances when
+  # they are launched.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
   S3FullAccessRoleForEC2:  # New IAM role definition (assuming not created yet)
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: S3FullAccessRoleForEC2
+      RoleName: S3FullAccessRoleForEC2  # Name of the role
+      # This is the role's trust policy statement that defines
+      # which services are allowed to assume this role.
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: '2012-10-17'  # Policy format version
         Statement:
-          - Effect: Allow
+          - Effect: Allow  # Allow the defined services to assume this role
             Principal:
-              Service: 
+              Service:  # The services that can assume this role
                 - ec2.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - 'sts:AssumeRole'  # The action that allows the service to assume the role
       Policies:
-        - PolicyName: S3FullAccessPolicy
+        - PolicyName: S3FullAccessPolicy  # Name of the inline policy in the role
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: '2012-10-17'  # Policy format version
             Statement:
-              - Effect: Allow
+              - Effect: Allow  # Allow the defined actions on the defined resources
                 Action:
-                  - 's3:*'
+                  - 's3:*'  # The actions to be allowed
                 Resource:
-                  - '*'
+                  - '*'  # The resources to which the actions apply
 
   #________ Instance Profile _________#
-
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  # This is an instance profile for EC2 instances that need full S3
+  # access. The profile references the S3FullAccessRoleForEC2 IAM role
+  # defined earlier in the template.
   S3FullAccessInstanceProfile:  # New resource for instance profile
     Type: AWS::IAM::InstanceProfile
     Properties:
+      # The role(s) that should be applied to EC2 instances that use
+      # this profile.
       Roles:
-        - S3FullAccessRoleForEC2  # Reference the created IAM role
+        - !Ref S3FullAccessRoleForEC2  # Reference the created IAM role
     DependsOn: S3FullAccessRoleForEC2  # This ensures role is created first
 
   #________ Load Balancer _________#
@@ -150,6 +163,11 @@ Resources:
           git clone "https://github.com/LiorTr/crypto.git"
           mv -f ./crypto/* .
           rm -rf crypto
+      # Add tags to the Launch Configuration
+      Tags:
+        - Key: Name
+          Value: "Rashbag-WebServer"
+          PropagateAtLaunch: true
 
   WebServerASGCPUPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -179,33 +197,41 @@ Resources:
         - !Ref WebServerASGCPUPolicy  # When the alarm triggers, scale the ASG
   
   #________ EC2 Private Instances _________#
+  # Private Instance 1: Creates an S3 bucket and uploads a file to it
   PrivateInstance1:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
       InstanceType: t2.micro # Free Tier instance type
-      KeyName: !Ref KeyPairName
-      IamInstanceProfile: !Ref S3FullAccessInstanceProfile
+      KeyName: !Ref KeyPairName # Name of an existing EC2 KeyPair to enable SSH access to the instance
+      IamInstanceProfile: !Ref S3FullAccessInstanceProfile # IAM Role with S3:* permissions
       NetworkInterfaces:
-        - AssociatePublicIpAddress: "false"
-          DeviceIndex: "0"
+        - AssociatePublicIpAddress: "false" # Launch in a private subnet
+          DeviceIndex: "0" # eth0
           GroupSet:
-            - !Ref SecurityGroupIdPrivate
+            - !Ref SecurityGroupIdPrivate # Allow traffic from the private subnet
           SubnetId: !Ref SubnetIdRashbagprivate1
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           # Create a new S3 bucket
+          # The bucket name is "rashbag-ec2"
           BUCKET_NAME="rashbag-ec2"
+
+          # Documentation: https://docs.aws.amazon.com/cli/latest/reference/s3/mb.html
           aws s3 mb s3://$BUCKET_NAME
+
           # Create a file with the content "hello world"
           echo "hello world" > rashbag.txt
+
           # Upload the file to the new bucket
+          # The object key is "rashbag.txt"
           aws s3 cp rashbag.txt s3://$BUCKET_NAME/
       Tags:
         - Key: Name
-          Value: "Rashbag-private-1"
+          Value: "Rashbag-private-1" # Add a tag to the instance with the key "Name" and value "Rashbag-private-1"
 
+  # Private Instance 2: No user data, only a tag
   PrivateInstance2:
     Type: AWS::EC2::Instance
     Properties:
@@ -220,18 +246,53 @@ Resources:
           SubnetId: !Ref SubnetIdRashbagprivate2
       Tags:
         - Key: Name
-          Value: "Rashbag-private-2"
-
+          Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
 #-------------------------- Outputs --------------------------#
+# Outputs
+# The values of these outputs are available in the "outputs" object of the
+# AWS CloudFormation template's response.
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The DNS name of the Application Load Balancer
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The Application Load Balancer's DNS name, which can be used to access the
+# web servers behind it. For example:
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# curl http://<WebServerALBDNSName>.<region>.elb.amazonaws.com
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The value of this output is the DNS name of the Application Load Balancer,
+# such as "rashbag-web-alb-XXXXXXXXXX.us-east-1.elb.amazonaws.com".
+# ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
 Outputs:
   WebServerALBDNSName:
     Description: The DNS name of the Application Load Balancer
+    # The value of this output is the DNS name of the Application Load
+    # Balancer, such as "rashbag-web-alb-XXXXXXXXXX.us-east-1.elb.amazonaws.com".
     Value: !GetAtt WebServerALB.DNSName
 
   PrivateInstance1Id:
     Description: The instance ID of the first private instance
+    # The value of this output is the instance ID of the first private instance,
+    # such as "i-0123456789abcdef0".
     Value: !Ref PrivateInstance1
 
   PrivateInstance2Id:
     Description: The instance ID of the second private instance
+    # The value of this output is the instance ID of the second private instance,
+    # such as "i-0123456789abcdef1".
     Value: !Ref PrivateInstance2
+
+  # Web server instances list
+  # <><><><><><><><><><><><><><><><><><><><><><><> #
+  # This output shows a list of web server instance IDs and names, separated by
+  # a comma and a space. This information can be useful for debugging and
+  # troubleshooting. The list is generated by joining the values of the
+  # WebServerASG parameter, which is an Auto Scaling Group, with a comma
+  # and a space.
+  WebServerInstances:
+    Description: List of web server instance IDs and names
+    # The value of this output is a comma-separated list of web server
+    # instance IDs and names, such as "i-0123456789abcdef0 - Rashbag-WebServer-1,
+    # i-0123456789abcdef1 - Rashbag-WebServer-2".
+    Value: !Join [', ', !Ref WebServerASG]
+
+
