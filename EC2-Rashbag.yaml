@@ -152,11 +152,12 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           # Create a new S3 bucket
-          aws s3 mb s3://rashbag-ec2
+          BUCKET_NAME="rashbag-ec2"
+          aws s3 mb s3://$BUCKET_NAME
           # Create a file with the content "hello world"
           echo "hello world" > rashbag.txt
           # Upload the file to the new bucket
-          aws s3 cp rashbag.txt s3://rashbag-ec2/
+          aws s3 cp rashbag.txt s3://$BUCKET_NAME/
       Tags:
         - Key: Name
           Value: "Rashbag-private-1"
