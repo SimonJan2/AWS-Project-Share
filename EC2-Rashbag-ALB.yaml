@@ -71,11 +71,18 @@ Resources:
         - S3FullAccessRoleForEC2  # Reference the created IAM role
     DependsOn: S3FullAccessRoleForEC2  # This ensures role is created first
 
+  #________ Load Balancer _________#
   # Application Load Balancer Resources
+  # ----------------------------------- #
+  # This template creates an Application Load Balancer (ALB)
+  # and attaches it to a Target Group containing a pair of
+  # EC2 instances. The ALB listens on port 80 and forwards incoming
+  # traffic to the Target Group.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
   WebServerALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Scheme: internet-facing
+      Scheme: internet-facing  # Make the ALB publicly accessible
       SecurityGroups:
         - !Ref SecurityGroupIdPublic
       Subnets:
@@ -86,50 +93,59 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: forward
+        - Type: forward  # Forward incoming traffic to the Target Group
           TargetGroupArn: !Ref WebServerALBTargetGroup
       LoadBalancerArn: !Ref WebServerALB
-      Port: 80
+      Port: 80  # Listen on port 80 for incoming traffic
       Protocol: HTTP
 
   WebServerALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckPath: /
-      Port: 80
+      HealthCheckPath: /  # Use the root URL for health checks
+      Port: 80  # Target Group will forward traffic to port 80 of its targets
       Protocol: HTTP
-      TargetType: instance
+      TargetType: instance  # Targets are EC2 instances
       VpcId: !Ref VpcId
 
   # Auto Scaling Group Resources
+  # ----------------------------------- #
+  # This template creates an Auto Scaling Group (ASG) that will
+  # launch and terminate EC2 instances based on CPU utilization.
+  # The ASG will launch at least 2 instances and at most 4
+  # instances, and will add or remove instances as needed to keep
+  # CPU utilization at 50%.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
   WebServerASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifier:
+      VPCZoneIdentifier:  # Launch instances in these subnets
         - !Ref SubnetIdRashbagWebServer1
         - !Ref SubnetIdRashbagWebServer2
       LaunchConfigurationName: !Ref WebServerLaunchConfiguration
-      MinSize: 2
-      MaxSize: 4
-      TargetGroupARNs:
+      MinSize: 2  # Launch at least this many instances
+      MaxSize: 4  # Launch at most this many instances
+      TargetGroupARNs:  # Attach the Target Group to the ASG
         - !Ref WebServerALBTargetGroup
 
   WebServerLaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-0aa7d40eeae50c9a9
-      InstanceType: t2.micro
+      ImageId: ami-0aa7d40eeae50c9a9  # Amazon Linux 2 AMI
+      InstanceType: t2.micro  # Free tier instance type
       KeyName: !Ref KeyPairName
       SecurityGroups:
-        - !Ref SecurityGroupIdPublic
+        - !Ref SecurityGroupIdPublic  # Attach to this security group
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
+          # Install the necessary packages and start the web server
           yum update -y
           yum install git -y
           yum install -y httpd
           systemctl start httpd
           systemctl enable httpd
+          # Clone the sample app and move its files to the web server root
           cd /var/www/html/
           git clone "https://github.com/LiorTr/crypto.git"
           mv -f ./crypto/* .
@@ -138,31 +154,31 @@ Resources:
   WebServerASGCPUPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      AutoScalingGroupName: !Ref WebServerASG
-      PolicyType: TargetTrackingScaling
+      AutoScalingGroupName: !Ref WebServerASG  # Apply the policy to the ASG
+      PolicyType: TargetTrackingScaling  # Scale based on CPU utilization
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
+          PredefinedMetricType: ASGAverageCPUUtilization  # Target 50% CPU utilization
         TargetValue: 50.0
 
   WebServerASGCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Alarm monitoring CPU utilization on EC2 instances
-      Namespace: AWS/EC2
+      AlarmDescription: "Alarm monitoring CPU utilization on EC2 instances"
+      Namespace: AWS/EC2  # Monitor CPU utilization of EC2 instances
       MetricName: CPUUtilization
       Dimensions:
         - Name: AutoScalingGroupName
-          Value: !Ref WebServerASG
+          Value: !Ref WebServerASG  # Monitor the instances in this ASG
       Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
+      Period: 300  # Check CPU utilization every 5 minutes
+      EvaluationPeriods: 2  # Check utilization for at least 2 periods
+      Threshold: 80  # If utilization is above 80%, trigger the alarm
+      ComparisonOperator: GreaterThanThreshold  # Trigger the alarm if above threshold
       AlarmActions:
-        - !Ref WebServerASGCPUPolicy
-
-  #________ EC2 Instances _________#
+        - !Ref WebServerASGCPUPolicy  # When the alarm triggers, scale the ASG
+  
+  #________ EC2 Private Instances _________#
   PrivateInstance1:
     Type: AWS::EC2::Instance
     Properties:
