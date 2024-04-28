@@ -310,69 +310,55 @@ Resources:
     DependsOn: PrivateInstance2Image
 
 #---------------Budget------------------#
-# Budget for the EC2-Rashbag-ALB-Docker stack
-# This budget is for the cost of the AWS resources used by this stack.
-# If the total cost of the stack exceeds $50 per month, an ACTUAL notification
-# will be sent to simonjan2@hotmail.com. The notification will be sent if the
-# cost is greater than 50. The notification will be sent again when the cost
-# exceeds 75 and then again when the cost exceeds 90.
+# This section defines a budget for the AWS resources used by this CloudFormation stack.
   BudgetRashbag:
     Type: "AWS::Budgets::Budget"
     Properties:
       Budget:
-        # The budget limit for the AWS resources used by this stack
+        # Set the budget limit to $10 per month
         BudgetLimit:
-          Amount: 50
+          Amount: 10
           Unit: USD
-        # The time unit for the budget. This stack uses a monthly budget
+        # Set the budget time period to monthly
         TimeUnit: MONTHLY
-
+        # Set the start time of the budget to the current time when the stack is created/updated
         TimePeriod:
-          Start: !Sub "${AWS::CurrentTime}" # The start time of the budget
-          End: !Sub "${AWS::CurrentTime} + PT31536000S" # Adds a year to the current time
-        # The type of budget. This stack uses a COST budget
+          Start: !Sub "${AWS::CurrentTime}"
+          # Set the end time of the budget to one year from the current time
+          End: !Sub "${AWS::CurrentTime} + PT31536000S"
+        # Set the budget type to track costs
         BudgetType: COST
-      # The notifications that will be sent if the budget exceeds its limit
+      # Define the notifications to be sent when the budget thresholds are exceeded
       NotificationsWithSubscribers:
-        -
-          # The notification to be sent
-          Notification:
-            # The type of notification. This stack uses an ACTUAL notification
+        - Notification:
+            # Send an ACTUAL notification when the actual costs exceed the threshold
             NotificationType: ACTUAL
-            # The operator to compare the forecasted costs against the budget
-            # limit. This stack uses the GREATER_THAN operator.
+            # The notification will be sent when the costs are greater than the threshold
             ComparisonOperator: GREATER_THAN
-            # The threshold at which to send the notification. This stack uses
-            # a threshold of 50.
+            # Set the threshold to 50% of the budget ($5)
             Threshold: 50
-          # The subscribers to receive the notification if the threshold is
-          # exceeded
+            ThresholdType: PERCENTAGE
+          # The subscriber (email address) that will receive the notification
           Subscribers:
-            -
-              # The type of subscription. This stack uses an EMAIL subscription
-              SubscriptionType: EMAIL
-              # The email address to which the notification will be sent. This
-              # stack uses simonjan2@hotmail.com.
+            - SubscriptionType: EMAIL
               Address: simonjan2@hotmail.com
-
-        -
-          Notification:
+        - Notification:
             NotificationType: ACTUAL
             ComparisonOperator: GREATER_THAN
+            # Send another notification when the costs exceed 75% of the budget ($7.5)
             Threshold: 75
+            ThresholdType: PERCENTAGE
           Subscribers:
-            -
-              SubscriptionType: EMAIL
+            - SubscriptionType: EMAIL
               Address: simonjan2@hotmail.com
-
-        -
-          Notification:
-              NotificationType: ACTUAL
-              ComparisonOperator: GREATER_THAN
-              Threshold: 90
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            # Send another notification when the costs exceed 90% of the budget ($9)
+            Threshold: 90
+            ThresholdType: PERCENTAGE
           Subscribers:
-            -
-              SubscriptionType: EMAIL
+            - SubscriptionType: EMAIL
               Address: simonjan2@hotmail.com
 
 #-------------------------- Outputs --------------------------#
