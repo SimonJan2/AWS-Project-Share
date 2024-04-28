@@ -245,35 +245,35 @@ Resources:
           GroupSet:
             - !Ref SecurityGroupIdPrivate
           SubnetId: !Ref SubnetIdRashbagprivate2
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          sudo yum update -y
-          sudo yum install -y docker
-          sudo service docker start
-          sudo systemctl enable docker
-          sudo usermod -aG docker ec2-user
-          touch Dockerfile
-          echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
+      # UserData:
+      #   Fn::Base64: !Sub |
+      #     #!/bin/bash
+      #     sudo yum update -y
+      #     sudo yum install -y docker
+      #     sudo service docker start
+      #     sudo systemctl enable docker
+      #     sudo usermod -aG docker ec2-user
+      #     touch Dockerfile
+      #     echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
 
-          # Install dependencies
-          RUN yum update -y && \
-           yum install -y httpd
+      #     # Install dependencies
+      #     RUN yum update -y && \
+      #      yum install -y httpd
           
-          # Install apache and write hello world message
-          RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
+      #     # Install apache and write hello world message
+      #     RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
           
-          # Configure apache
-          RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
-           echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
-           echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
-           chmod 755 /root/run_apache.sh
+      #     # Configure apache
+      #     RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
+      #      echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
+      #      echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
+      #      chmod 755 /root/run_apache.sh
           
-          EXPOSE 80
+      #     EXPOSE 80
           
-          CMD /root/run_apache.sh" >> Dockerfile    
-          docker build -t rashbag-ec2 .
-          docker run -d -p 80:80 rashbag-ec2
+      #     CMD /root/run_apache.sh" >> Dockerfile    
+      #     docker build -t rashbag-ec2 .
+      #     docker run -d -p 80:80 rashbag-ec2
       Tags:
         - Key: Name
           Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
@@ -323,9 +323,9 @@ Resources:
         TimeUnit: MONTHLY
         # Set the start time of the budget to the current time when the stack is created/updated
         TimePeriod:
-          Start: !Sub "${AWS::CurrentTime}"
+          Start: "2024-05-01T00:00:00Z"
           # Set the end time of the budget to one year from the current time
-          End: !Sub "${AWS::CurrentTime} + PT31536000S"
+          End: !Sub "2025-04-30T23:59:59Z"
         # Set the budget type to track costs
         BudgetType: COST
       # Define the notifications to be sent when the budget thresholds are exceeded
