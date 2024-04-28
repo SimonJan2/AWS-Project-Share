@@ -397,5 +397,5 @@ Outputs:
 
   BudgetId:
     Value: !Ref BudgetRashbag
-    description: The ID of the budget
+    Description: The ID of the budget
     
