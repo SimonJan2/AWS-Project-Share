@@ -278,36 +278,36 @@ Resources:
         - Key: Name
           Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
   
-  #________ AMIs _________#
-  # Stop the PrivateInstance2 EC2 instance and create an AMI from it
-  StopPrivateInstance2:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
-      InstanceState: stopped # The desired state of the EC2 instance
-    # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
-    DependsOn: PrivateInstance2
+  # #________ AMIs _________#
+  # # Stop the PrivateInstance2 EC2 instance and create an AMI from it
+  # StopPrivateInstance2:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
+  #     InstanceState: stopped # The desired state of the EC2 instance
+  #   # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
+  #   DependsOn: PrivateInstance2
 
-  # Create an AMI from the PrivateInstance2 EC2 instance
-  PrivateInstance2Image:
-    Type: AWS::EC2::Image
-    Properties:
-      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to create an AMI from
-      Name: PrivateInstance2-GoldenImage # The name of the AMI to create
-      Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
-    # Depends on the StopPrivateInstance2 so that the AMI is created after
-    # the EC2 instance is stopped.
-    DependsOn: StopPrivateInstance2
+  # # Create an AMI from the PrivateInstance2 EC2 instance
+  # PrivateInstance2Image:
+  #   Type: AWS::EC2::Image
+  #   Properties:
+  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to create an AMI from
+  #     Name: PrivateInstance2-GoldenImage # The name of the AMI to create
+  #     Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
+  #   # Depends on the StopPrivateInstance2 so that the AMI is created after
+  #   # the EC2 instance is stopped.
+  #   DependsOn: StopPrivateInstance2
 
-  # Start the stopped PrivateInstance2 EC2 instance
-  StartPrivateInstance2:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
-      InstanceState: running # The desired state of the EC2 instance
-    # Depends on the PrivateInstance2Image so that the EC2 instance is started
-    # after the AMI is created.
-    DependsOn: PrivateInstance2Image
+  # # Start the stopped PrivateInstance2 EC2 instance
+  # StartPrivateInstance2:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
+  #     InstanceState: running # The desired state of the EC2 instance
+  #   # Depends on the PrivateInstance2Image so that the EC2 instance is started
+  #   # after the AMI is created.
+  #   DependsOn: PrivateInstance2Image
 
 #---------------Budget------------------#
 # This section defines a budget for the AWS resources used by this CloudFormation stack.
@@ -322,10 +322,10 @@ Resources:
         # Set the budget time period to monthly
         TimeUnit: MONTHLY
         # Set the start time of the budget to the current time when the stack is created/updated
-        TimePeriod:
-          Start: "2024-05-01T00:00:00Z"
-          # Set the end time of the budget to one year from the current time
-          End: !Sub "2025-04-30T23:59:59Z"
+        # TimePeriod:
+        #   Start: 1225864800
+        #   # Set the end time of the budget to one year from the current time
+        #   End: 1926864800
         # Set the budget type to track costs
         BudgetType: COST
       # Define the notifications to be sent when the budget thresholds are exceeded
