@@ -1,0 +1,413 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch an EC2 instance in the free tier 
+#-------------------------- Parameters --------------------------#
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  VpcId:
+    Description: ID of the VPC where the instance should be launched
+    Type: AWS::EC2::VPC::Id
+  
+  SubnetIdRashbagWebServer1:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SubnetIdRashbagWebServer2:
+    Description: ID of the public subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+
+  SubnetIdRashbagprivate1:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id  
+  
+  SubnetIdRashbagprivate2:
+    Description: ID of the private subnet where the instance should be launched
+    Type: AWS::EC2::Subnet::Id
+  
+  SecurityGroupIdPublic:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SecurityGroupIdPrivate:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
+
+#-------------------------- Resources --------------------------#
+Resources:
+
+  #________ IAM Roles _________#
+  # IAM Role for granting EC2 instances full access to S3
+  # -----------------------------------------------------
+  # This IAM role allows EC2 instances to have full access to
+  # S3 resources. The role is assumed by EC2 instances when
+  # they are launched.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  S3FullAccessRoleForEC2:  # New IAM role definition (assuming not created yet)
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: S3FullAccessRoleForEC2  # Name of the role
+      # This is the role's trust policy statement that defines
+      # which services are allowed to assume this role.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'  # Policy format version
+        Statement:
+          - Effect: Allow  # Allow the defined services to assume this role
+            Principal:
+              Service:  # The services that can assume this role
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'  # The action that allows the service to assume the role
+      Policies:
+        - PolicyName: S3FullAccessPolicy  # Name of the inline policy in the role
+          PolicyDocument:
+            Version: '2012-10-17'  # Policy format version
+            Statement:
+              - Effect: Allow  # Allow the defined actions on the defined resources
+                Action:
+                  - 's3:*'  # The actions to be allowed
+                Resource:
+                  - '*'  # The resources to which the actions apply
+
+  #________ Instance Profile _________#
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  # This is an instance profile for EC2 instances that need full S3
+  # access. The profile references the S3FullAccessRoleForEC2 IAM role
+  # defined earlier in the template.
+  S3FullAccessInstanceProfile:  # New resource for instance profile
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      # The role(s) that should be applied to EC2 instances that use
+      # this profile.
+      Roles:
+        - !Ref S3FullAccessRoleForEC2  # Reference the created IAM role
+    DependsOn: S3FullAccessRoleForEC2  # This ensures role is created first
+
+  #________ Load Balancer _________#
+  # Application Load Balancer Resources
+  # ----------------------------------- #
+  # This template creates an Application Load Balancer (ALB)
+  # and attaches it to a Target Group containing a pair of
+  # EC2 instances. The ALB listens on port 80 and forwards incoming
+  # traffic to the Target Group.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  WebServerALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing  # Make the ALB publicly accessible
+      SecurityGroups:
+        - !Ref SecurityGroupIdPublic
+      Subnets:
+        - !Ref SubnetIdRashbagWebServer1
+        - !Ref SubnetIdRashbagWebServer2
+
+  WebServerALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward  # Forward incoming traffic to the Target Group
+          TargetGroupArn: !Ref WebServerALBTargetGroup
+      LoadBalancerArn: !Ref WebServerALB
+      Port: 80  # Listen on port 80 for incoming traffic
+      Protocol: HTTP
+
+  WebServerALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckPath: /  # Use the root URL for health checks
+      Port: 80  # Target Group will forward traffic to port 80 of its targets
+      Protocol: HTTP
+      TargetType: instance  # Targets are EC2 instances
+      VpcId: !Ref VpcId
+
+  # Auto Scaling Group Resources
+  # ----------------------------------- #
+  # This template creates an Auto Scaling Group (ASG) that will
+  # launch and terminate EC2 instances based on CPU utilization.
+  # The ASG will launch at least 2 instances and at most 4
+  # instances, and will add or remove instances as needed to keep
+  # CPU utilization at 50%.
+  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:  # Launch instances in these subnets
+        - !Ref SubnetIdRashbagWebServer1
+        - !Ref SubnetIdRashbagWebServer2
+      LaunchConfigurationName: !Ref WebServerLaunchConfiguration
+      MinSize: 2  # Launch at least this many instances
+      MaxSize: 4  # Launch at most this many instances
+      TargetGroupARNs:  # Attach the Target Group to the ASG
+        - !Ref WebServerALBTargetGroup
+      # Add tags to the Launch Configuration
+      Tags:
+        - Key: Name
+          Value: "Rashbag-WebServer"
+          PropagateAtLaunch: true
+
+  WebServerLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9  # Amazon Linux 2 AMI
+      InstanceType: t2.micro  # Free tier instance type
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+        - !Ref SecurityGroupIdPublic  # Attach to this security group
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Install the necessary packages and start the web server
+          yum update -y
+          yum install git -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          # Clone the sample app and move its files to the web server root
+          cd /var/www/html/
+          git clone "https://github.com/LiorTr/crypto.git"
+          mv -f ./crypto/* .
+          rm -rf crypto
+
+
+  WebServerASGCPUPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref WebServerASG  # Apply the policy to the ASG
+      PolicyType: TargetTrackingScaling  # Scale based on CPU utilization
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization  # Target 50% CPU utilization
+        TargetValue: 50.0
+
+  WebServerASGCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm monitoring CPU utilization on EC2 instances"
+      Namespace: AWS/EC2  # Monitor CPU utilization of EC2 instances
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerASG  # Monitor the instances in this ASG
+      Statistic: Average
+      Period: 300  # Check CPU utilization every 5 minutes
+      EvaluationPeriods: 2  # Check utilization for at least 2 periods
+      Threshold: 80  # If utilization is above 80%, trigger the alarm
+      ComparisonOperator: GreaterThanThreshold  # Trigger the alarm if above threshold
+      AlarmActions:
+        - !Ref WebServerASGCPUPolicy  # When the alarm triggers, scale the ASG
+  
+  #________ EC2 Private Instances _________#
+  # Private Instance 1: Creates an S3 bucket and uploads a file to it
+  PrivateInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName # Name of an existing EC2 KeyPair to enable SSH access to the instance
+      IamInstanceProfile: !Ref S3FullAccessInstanceProfile # IAM Role with S3:* permissions
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false" # Launch in a private subnet
+          DeviceIndex: "0" # eth0
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate # Allow traffic from the private subnet
+          SubnetId: !Ref SubnetIdRashbagprivate1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Create a new S3 bucket
+          # The bucket name is "rashbag-ec2"
+          BUCKET_NAME="rashbag-ec2"
+
+          # Documentation: https://docs.aws.amazon.com/cli/latest/reference/s3/mb.html
+          aws s3 mb s3://$BUCKET_NAME
+
+          # Create a file with the content "hello world"
+          echo "hello world" > rashbag.txt
+
+          # Upload the file to the new bucket
+          # The object key is "rashbag.txt"
+          aws s3 cp rashbag.txt s3://$BUCKET_NAME/
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-1" # Add a tag to the instance with the key "Name" and value "Rashbag-private-1"
+
+  # Private Instance 2: Creates a Docker image and runs it to Create an AMI
+  PrivateInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
+      InstanceType: t2.micro # Free Tier instance type
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroupIdPrivate
+          SubnetId: !Ref SubnetIdRashbagprivate2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo service docker start
+          sudo systemctl enable docker
+          sudo usermod -aG docker ec2-user
+          touch Dockerfile
+          echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
+
+          # Install dependencies
+          RUN yum update -y && \
+           yum install -y httpd
+          
+          # Install apache and write hello world message
+          RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
+          
+          # Configure apache
+          RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
+           echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
+           echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
+           chmod 755 /root/run_apache.sh
+          
+          EXPOSE 80
+          
+          CMD /root/run_apache.sh" >> Dockerfile    
+          docker build -t rashbag-ec2 .
+          docker run -d -p 80:80 rashbag-ec2
+      Tags:
+        - Key: Name
+          Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
+  
+  #________ AMIs _________#
+  # Stop the PrivateInstance2 EC2 instance and create an AMI from it
+  StopPrivateInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
+      InstanceState: stopped # The desired state of the EC2 instance
+    # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
+    DependsOn: PrivateInstance2
+
+  # Create an AMI from the PrivateInstance2 EC2 instance
+  PrivateInstance2Image:
+    Type: AWS::EC2::Image
+    Properties:
+      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to create an AMI from
+      Name: PrivateInstance2-GoldenImage # The name of the AMI to create
+      Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
+    # Depends on the StopPrivateInstance2 so that the AMI is created after
+    # the EC2 instance is stopped.
+    DependsOn: StopPrivateInstance2
+
+  # Start the stopped PrivateInstance2 EC2 instance
+  StartPrivateInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
+      InstanceState: running # The desired state of the EC2 instance
+    # Depends on the PrivateInstance2Image so that the EC2 instance is started
+    # after the AMI is created.
+    DependsOn: PrivateInstance2Image
+
+#---------------Budget------------------#
+# Budget for the EC2-Rashbag-ALB-Docker stack
+# This budget is for the cost of the AWS resources used by this stack.
+# If the total cost of the stack exceeds $50 per month, an ACTUAL notification
+# will be sent to simonjan2@hotmail.com. The notification will be sent if the
+# cost is greater than 50. The notification will be sent again when the cost
+# exceeds 75 and then again when the cost exceeds 90.
+  BudgetRashbag:
+    Type: "AWS::Budgets::Budget"
+    Properties:
+      Budget:
+        # The budget limit for the AWS resources used by this stack
+        BudgetLimit:
+          Amount: 50
+          Unit: USD
+        # The time unit for the budget. This stack uses a monthly budget
+        TimeUnit: MONTHLY
+
+        TimePeriod:
+          Start: !Sub "${AWS::CurrentTime}" # The start time of the budget
+          End: !Sub "${AWS::CurrentTime} + PT31536000S" # Adds a year to the current time
+        # The type of budget. This stack uses a COST budget
+        BudgetType: COST
+      # The notifications that will be sent if the budget exceeds its limit
+      NotificationsWithSubscribers:
+        -
+          # The notification to be sent
+          Notification:
+            # The type of notification. This stack uses an ACTUAL notification
+            NotificationType: ACTUAL
+            # The operator to compare the forecasted costs against the budget
+            # limit. This stack uses the GREATER_THAN operator.
+            ComparisonOperator: GREATER_THAN
+            # The threshold at which to send the notification. This stack uses
+            # a threshold of 50.
+            Threshold: 50
+          # The subscribers to receive the notification if the threshold is
+          # exceeded
+          Subscribers:
+            -
+              # The type of subscription. This stack uses an EMAIL subscription
+              SubscriptionType: EMAIL
+              # The email address to which the notification will be sent. This
+              # stack uses simonjan2@hotmail.com.
+              Address: simonjan2@hotmail.com
+
+        -
+          Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 75
+          Subscribers:
+            -
+              SubscriptionType: EMAIL
+              Address: simonjan2@hotmail.com
+
+        -
+          Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 90
+          Subscribers:
+            -
+              SubscriptionType: EMAIL
+              Address: simonjan2@hotmail.com
+
+#-------------------------- Outputs --------------------------#
+# Outputs
+# The values of these outputs are available in the "outputs" object of the
+# AWS CloudFormation template's response.
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The DNS name of the Application Load Balancer
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The Application Load Balancer's DNS name, which can be used to access the
+# web servers behind it. For example:
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# curl http://<WebServerALBDNSName>.<region>.elb.amazonaws.com
+# <><><><><><><><><><><><><><><><><><><><><><><> #
+# The value of this output is the DNS name of the Application Load Balancer,
+# such as "rashbag-web-alb-XXXXXXXXXX.us-east-1.elb.amazonaws.com".
+# ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+Outputs:
+  WebServerALBDNSName:
+    Description: The DNS name of the Application Load Balancer
+    # The value of this output is the DNS name of the Application Load
+    # Balancer, such as "rashbag-web-alb-XXXXXXXXXX.us-east-1.elb.amazonaws.com".
+    Value: !GetAtt WebServerALB.DNSName
+
+  PrivateInstance1Id:
+    Description: The instance ID of the first private instance
+    # The value of this output is the instance ID of the first private instance,
+    # such as "i-0123456789abcdef0".
+    Value: !Ref PrivateInstance1
+
+  PrivateInstance2Id:
+    Description: The instance ID of the second private instance
+    # The value of this output is the instance ID of the second private instance,
+    # such as "i-0123456789abcdef1".
+    Value: !Ref PrivateInstance2
+
+  BudgetId:
+    Value: !Ref BudgetRashbag
