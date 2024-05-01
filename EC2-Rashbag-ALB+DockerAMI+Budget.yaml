@@ -311,7 +311,7 @@ Resources:
           Value: "Rashbag-private-1" # Add a tag to the instance with the key "Name" and value "Rashbag-private-1"
 
   #________ EC2 Public Instances For Golden Image _________#
-  # Public Instance 2: Creates a Docker image and runs it to Create an AMI (Golden Image) - Public Subnet 2
+  # Public Instance 2: Creates a Docker image and runs it to Create an AMI (Golden Image) - SubnetIdRashbagWebServer2
   PublicInstance2:
     Type: AWS::EC2::Instance
     Properties:
@@ -323,7 +323,7 @@ Resources:
           DeviceIndex: "0" # eth0
           GroupSet:
             - !Ref SecurityGroupIdPublic # Allow traffic from the public subnet
-          SubnetId: !Ref SubnetIdRashbagpublic2
+          SubnetId: !Ref SubnetIdRashbagWebServer2
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -433,11 +433,11 @@ Outputs:
     # such as "i-0123456789abcdef0".
     Value: !Ref PrivateInstance1
 
-  PrivateInstance2Id:
+  PublicInstance2Id:
     Description: The instance ID of the second private instance
     # The value of this output is the instance ID of the second private instance,
     # such as "i-0123456789abcdef1".
-    Value: !Ref PrivateInstance2
+    Value: !Ref PublicInstance2
 
   BudgetId:
     Value: !Ref BudgetRashbag
