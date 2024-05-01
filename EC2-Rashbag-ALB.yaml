@@ -333,6 +333,7 @@ Resources:
           #!/bin/bash
           sudo yum update -y
           yum install git -y
+          yum install htop -y
           sudo yum install -y docker
           sudo service docker start
           systemctl enable docker
