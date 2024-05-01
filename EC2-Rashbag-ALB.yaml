@@ -339,7 +339,8 @@ Resources:
           systemctl enable docker
           usermod -aG docker ec2-user
           cd /home/ec2-user
-          git clone "https://github.com/SimonJan2/AWS-Web-Rashbag.git"
+          #git clone "https://github.com/SimonJan2/AWS-Web-Rashbag.git"
+          git clone "https://github.com/Vatshayan/Ecommerce-Website.git"
 
           cat <<EOF > Dockerfile
           FROM public.ecr.aws/amazonlinux/amazonlinux:latest
@@ -362,7 +363,7 @@ Resources:
           CMD /root/run_apache.sh
           EOF
           docker image build -t rashbag-ec2 .
-          docker run -d --name rashbag -p 80:80 -v /home/ec2-user/AWS-Web-Rashbag:/var/www/html/ rashbag-ec2
+          docker run -d --name rashbag -p 80:80 -v /home/ec2-user/Ecommerce-Website:/var/www/html/ rashbag-ec2
       Tags:
         - Key: Name
           Value: "Rashbag-public-2" # Add a tag to the instance with the key "Name" and value "Rashbag-public-2"
