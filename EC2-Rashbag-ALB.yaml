@@ -6,33 +6,37 @@ Parameters:
     Description: Name of an existing EC2 key pair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
   
-  VpcId:
-    Description: ID of the VPC where the instance should be launched
-    Type: AWS::EC2::VPC::Id
+  # VpcId:
+  #   Description: ID of the VPC where the instance should be launched
+  #   Type: AWS::EC2::VPC::Id
   
-  SubnetIdRashbagWebServer1:
-    Description: ID of the public subnet where the instance should be launched
-    Type: AWS::EC2::Subnet::Id
+  # SubnetIdRashbagWebServer1:
+  #   Description: ID of the public subnet where the instance should be launched
+  #   Type: AWS::EC2::Subnet::Id
   
-  SubnetIdRashbagWebServer2:
-    Description: ID of the public subnet where the instance should be launched
-    Type: AWS::EC2::Subnet::Id
+  # SubnetIdRashbagWebServer2:
+  #   Description: ID of the public subnet where the instance should be launched
+  #   Type: AWS::EC2::Subnet::Id
 
-  SubnetIdRashbagprivate1:
-    Description: ID of the private subnet where the instance should be launched
-    Type: AWS::EC2::Subnet::Id  
+  # SubnetIdRashbagprivate1:
+  #   Description: ID of the private subnet where the instance should be launched
+  #   Type: AWS::EC2::Subnet::Id  
   
-  SubnetIdRashbagprivate2:
-    Description: ID of the private subnet where the instance should be launched
-    Type: AWS::EC2::Subnet::Id
+  # SubnetIdRashbagprivate2:
+  #   Description: ID of the private subnet where the instance should be launched
+  #   Type: AWS::EC2::Subnet::Id
   
-  SecurityGroupIdPublic:
-    Description: ID of the security group to associate with the instance
-    Type: AWS::EC2::SecurityGroup::Id
+  # SecurityGroupIdPublic:
+  #   Description: ID of the security group to associate with the instance
+  #   Type: AWS::EC2::SecurityGroup::Id
 
-  SecurityGroupIdPrivate:
-    Description: ID of the security group to associate with the instance
-    Type: AWS::EC2::SecurityGroup::Id
+  # SecurityGroupIdPrivate:
+  #   Description: ID of the security group to associate with the instance
+  #   Type: AWS::EC2::SecurityGroup::Id
+  
+  # SecurityGroupIdAMIImage:
+  #   Description: ID of the security group to associate with the instance
+  #   Type: AWS::EC2::SecurityGroup::Id
 
 #---------------------------------------------------------------- Resources ----------------------------------------------------------------#
 Resources:
@@ -100,22 +104,29 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: LoadBalancer SG
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue VPCId  #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+      Tags: #Test - Need to Check!!!!!
+        - Key: Name
+          Value: WebServerSecurityGroup # name of the security group
 
   WebServerALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
+      Name: RasbagWebServerALB  # Name of the ALB
       Scheme: internet-facing  # Make the ALB publicly accessible
       SecurityGroups:
         - !GetAtt WebServerSecurityGroup.GroupId
       Subnets:
-        - !Ref SubnetIdRashbagWebServer1
-        - !Ref SubnetIdRashbagWebServer2
+        - !ImportValue Public1Subnetid   #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
+        - !ImportValue Public2Subnetid   #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
+      LoadBalancerAttributes: #Test - Need to Check!!!!!
+        - Key: idle_timeout.timeout_seconds # Idle timeout for the ALB
+          Value: '60'
 
   WebServerALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -134,7 +145,12 @@ Resources:
       Port: 80  # Target Group will forward traffic to port 80 of its targets
       Protocol: HTTP
       TargetType: instance  # Targets are EC2 instances
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue VPCId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
+      HealthCheckProtocol: HTTP  #Test - Need to Check!!!!!
+      HealthCheckIntervalSeconds: 30  #Test - Need to Check!!!!!
+      HealthCheckTimeoutSeconds: 5  #Test - Need to Check!!!!!
+      HealthyThresholdCount: 2  #Test - Need to Check!!!!!
+      UnhealthyThresholdCount: 2  #Test - Need to Check!!!!!
 
   # Auto Scaling Group Resources
   # ----------------------------------- #
@@ -148,14 +164,30 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:  # Launch instances in these subnets
-        - !Ref SubnetIdRashbagWebServer1
-        - !Ref SubnetIdRashbagWebServer2
+        - !ImportValue Public1Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
+        - !ImportValue Public2Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
       LaunchConfigurationName: !Ref WebServerLaunchConfiguration
-      MinSize: 2  # Launch at least this many instances
+      MinSize: 1  # Launch at least this many instances
+      DesiredCapacity: 2  # Launch exactly this many instances  #Test - Need to Check!!!!!
       MaxSize: 4  # Launch at most this many instances
       TargetGroupARNs:  # Attach the Target Group to the ASG
         - !Ref WebServerALBTargetGroup
       # Add tags to the Launch Configuration
+      # Enable detailed Auto Scaling Group metrics for use with CloudWatch.
+      # These metrics are required for the budget to work.
+      HealthCheckType: EC2  # Use EC2 health checks
+      HealthCheckGracePeriod: 300  # Wait 300 seconds before checking health
+      MetricsCollection:
+        - Granularity: "1Minute"  # Metrics granularity: 1 minute
+          Metrics:
+            - "GroupMinSize"  # Minimum size of the Auto Scaling Group
+            - "GroupMaxSize"  # Maximum size of the Auto Scaling Group
+            - "GroupDesiredCapacity"  # Desired capacity of the Auto Scaling Group
+            - "GroupInServiceInstances"  # Number of instances in service
+            - "GroupPendingInstances"  # Number of instances pending
+            - "GroupStandbyInstances"  # Number of instances in standby
+            - "GroupTerminatingInstances"  # Number of instances terminating
+            - "GroupTotalInstances"  # Total number of instances
       Tags:
         - Key: Name
           Value: "Rashbag-WebServer"
@@ -168,7 +200,7 @@ Resources:
       InstanceType: t2.micro  # Free tier instance type
       KeyName: !Ref KeyPairName
       SecurityGroups:
-        - !Ref SecurityGroupIdPublic  # Attach to this security group
+        - !ImportValue PublicSubnetSecurityGroupId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑# # Attach to this security group
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -177,6 +209,8 @@ Resources:
           yum install htop -y
           amazon-linux-extras install epel -y
           yum install stress -y
+          # stress --cpu 8 --timeout 800 &
+          # killall stress
           yum install git -y
           yum install -y httpd
           systemctl start httpd
@@ -187,39 +221,59 @@ Resources:
           mv -f ./AWS-Web-Rashbag/* .
           rm -rf AWS-Web-Rashbag
 
-
-  WebServerASGCPUPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
+  RashbagScaleUpPolicy: 
+    Type: AWS::AutoScaling::ScalingPolicy # Create a scaling policy
     Properties:
-      AutoScalingGroupName: !Ref WebServerASG  # Apply the policy to the ASG
-      PolicyType: TargetTrackingScaling  # Scale based on CPU utilization
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization  # Target 50% CPU utilization
-        TargetValue: 50.0
+      AdjustmentType: ChangeInCapacity # Increase by 2 instances
+      AutoScalingGroupName: !Ref WebServerASG # Name of the ASG
+      Cooldown: 60 # Adjust based on your scaling needs
+      ScalingAdjustment: 2 # Increase by 2 instances
 
-  WebServerASGCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
+  RashbagScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy # Create a scaling policy
     Properties:
-      AlarmDescription: "Alarm monitoring CPU utilization on EC2 instances"
-      Namespace: AWS/EC2  # Monitor CPU utilization of EC2 instances
-      MetricName: CPUUtilization
+      AdjustmentType: ChangeInCapacity # Decrease by 2 instances
+      AutoScalingGroupName: !Ref WebServerASG # Name of the ASG
+      Cooldown: 180 # Adjust based on your scaling needs
+      ScalingAdjustment: -2 # Decrease by 2 instances
+
+  RashbagScaleUpAlarm: # Create an alarm
+    Type: AWS::CloudWatch::Alarm # Create an alarm
+    Properties:
+      AlarmDescription: "Scale up if CPU utilization is greater than 40% for 1 minutes"
+      Namespace: AWS/EC2 # Use the EC2 namespace
+      MetricName: CPUUtilization # CPU utilization
       Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebServerASG  # Monitor the instances in this ASG
-      Statistic: Average
-      Period: 300  # Check CPU utilization every 5 minutes
-      EvaluationPeriods: 2  # Check utilization for at least 2 periods
-      Threshold: 80  # If utilization is above 80%, trigger the alarm
-      ComparisonOperator: GreaterThanThreshold  # Trigger the alarm if above threshold
-      AlarmActions:
-        - !Ref WebServerASGCPUPolicy  # When the alarm triggers, scale the ASG
-  
+        - Name: AutoScalingGroupName # Name of the ASG
+          Value: !Ref WebServerASG # Name of the ASG
+      Statistic: Average # Use the average statistic
+      Period: 60 # 1 minute
+      EvaluationPeriods: 1 # 1 minute
+      Threshold: 40 # 40%
+      ComparisonOperator: GreaterThanThreshold # Scale up if CPU utilization is greater than 40%
+      AlarmActions: [!Ref RashbagScaleUpPolicy] # Add the scaling policy
+
+  RashbagScaleDownAlarm: # Create an alarm
+    Type: AWS::CloudWatch::Alarm # Create an alarm
+    Properties:
+      AlarmDescription: "Scale down if CPU utilization is less than 20% for 2 minutes"
+      Namespace: AWS/EC2 # Use the EC2 namespace
+      MetricName: CPUUtilization # CPU utilization
+      Dimensions:
+        - Name: AutoScalingGroupName # Name of the ASG
+          Value: !Ref WebServerASG # Name of the ASG
+      Statistic: Average # Use the average statistic
+      Period: 180 # 3 minute
+      EvaluationPeriods: 1 # 1 minute
+      Threshold: 20 # 20%
+      ComparisonOperator: LessThanThreshold # Scale down if CPU utilization is less than 20%
+      AlarmActions: [!Ref RashbagScaleDownPolicy] # Add the scaling policy
+
   # Add Access to load balancer for the public SG
   MySecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref SecurityGroupIdPublic
+      GroupId: !ImportValue PublicSubnetSecurityGroupId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
       IpProtocol: "tcp"
       FromPort: 80
       ToPort: 80
@@ -238,14 +292,14 @@ Resources:
         - AssociatePublicIpAddress: "false" # Launch in a private subnet
           DeviceIndex: "0" # eth0
           GroupSet:
-            - !Ref SecurityGroupIdPrivate # Allow traffic from the private subnet
-          SubnetId: !Ref SubnetIdRashbagprivate1
+            - !ImportValue  PrivateSubnetSecurityGroupId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑# # Allow traffic from the private subnet
+          SubnetId: !ImportValue Private1Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           # Create a new S3 bucket
           # The bucket name is "rashbag-ec2"
-          BUCKET_NAME="rashbag-ec2"
+          BUCKET_NAME="rashbag-ec2-private-1"
 
           # Documentation: https://docs.aws.amazon.com/cli/latest/reference/s3/mb.html
           aws s3 mb s3://$BUCKET_NAME
@@ -260,82 +314,57 @@ Resources:
         - Key: Name
           Value: "Rashbag-private-1" # Add a tag to the instance with the key "Name" and value "Rashbag-private-1"
 
-  # Private Instance 2: Creates a Docker image and runs it to Create an AMI
-  PrivateInstance2:
+  #________ EC2 Public Instances For Golden Image _________#
+  # Public Instance 2: Creates a Docker image and runs it to Create an AMI (Golden Image) - SubnetIdRashbagWebServer2
+  PublicInstance2:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: ami-0aa7d40eeae50c9a9 # Amazon Linux 2 AMI (Free Tier)
       InstanceType: t2.micro # Free Tier instance type
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
-        - AssociatePublicIpAddress: "false"
-          DeviceIndex: "0"
+        - AssociatePublicIpAddress: "true" # Launch in a public subnet
+          DeviceIndex: "0" # eth0
           GroupSet:
-            - !Ref SecurityGroupIdPrivate
-          SubnetId: !Ref SubnetIdRashbagprivate2
-#      UserData:
-#        Fn::Base64: !Sub |
-#          #!/bin/bash
-#          sudo yum update -y
-#          sudo yum install -y docker
-#          sudo service docker start
-#          sudo systemctl enable docker
-#          sudo usermod -aG docker ec2-user
-#          touch Dockerfile
-#          echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
-#
-#          # Install dependencies
-#          RUN yum update -y && \
-#           yum install -y httpd
-#          
-#          # Install apache and write hello world message
-#          RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
-#          
-#          # Configure apache
-#          RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
-#           echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
-#           echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
-#           chmod 755 /root/run_apache.sh
-#          
-#          EXPOSE 80
-#          
-#          CMD /root/run_apache.sh" >> Dockerfile    
-#          docker build -t rashbag-ec2 .
-#          docker run -d -p 80:80 rashbag-ec2
+            - !ImportValue PublicAMIImageSecurityGroupId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑# # Allow traffic from the public subnet
+          SubnetId: !ImportValue Public2Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo yum update -y
+          yum install git -y
+          sudo yum install -y docker
+          sudo service docker start
+          systemctl enable docker
+          usermod -aG docker ec2-user
+          cd /home/ec2-user
+          git clone "https://github.com/SimonJan2/AWS-Web-Rashbag.git"
+
+          cat <<EOF > Dockerfile
+          FROM public.ecr.aws/amazonlinux/amazonlinux:latest
+
+          # Install dependencies
+          RUN yum update -y && \
+              yum install -y httpd
+
+          # Install apache and write hello world message
+          RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
+
+          # Configure apache
+          RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
+              echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
+              echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
+              chmod 755 /root/run_apache.sh
+
+          EXPOSE 80
+
+          CMD /root/run_apache.sh
+          EOF
+          docker image build -t rashbag-ec2 .
+          docker run -d --name rashbag -p 80:80 -v /home/ec2-user/AWS-Web-Rashbag:/var/www/html/ rashbag-ec2
       Tags:
         - Key: Name
-          Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
-  
-  #________ AMIs _________#
-  # Stop the PrivateInstance2 EC2 instance and create an AMI from it
-  # StopPrivateInstance2:
-    # Type: AWS::EC2::Instance
-    # Properties:
-      # InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
-      # InstanceState: stopped # The desired state of the EC2 instance
-    # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
-    # DependsOn: PrivateInstance2
-
-  # Create an AMI from the PrivateInstance2 EC2 instance
-  # PrivateInstance2Image:
-    # Type: AWS::EC2::Image
-    # Properties:
-      # InstanceId: ami-0aa7d40eeae50c9a9 # The ID of the EC2 instance to create an AMI from
-      # Name: PrivateInstance2-GoldenImage # The name of the AMI to create
-      # Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
-    # Depends on the StopPrivateInstance2 so that the AMI is created after
-    # the EC2 instance is stopped.
-    # DependsOn: StopPrivateInstance2
-
-  # Start the stopped PrivateInstance2 EC2 instance
-  # StartPrivateInstance2:
-    # Type: AWS::EC2::Instance
-    # Properties:
-      # InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
-      # InstanceState: running # The desired state of the EC2 instance
-    # Depends on the PrivateInstance2Image so that the EC2 instance is started
-    # after the AMI is created.
-    # DependsOn: PrivateInstance2Image
+          Value: "Rashbag-public-2" # Add a tag to the instance with the key "Name" and value "Rashbag-public-2"
 
 #---------------Budget------------------#
 # This section defines a budget for the AWS resources used by this CloudFormation stack.
@@ -413,11 +442,11 @@ Outputs:
     # such as "i-0123456789abcdef0".
     Value: !Ref PrivateInstance1
 
-  PrivateInstance2Id:
+  PublicInstance2Id:
     Description: The instance ID of the second private instance
     # The value of this output is the instance ID of the second private instance,
     # such as "i-0123456789abcdef1".
-    Value: !Ref PrivateInstance2
+    Value: !Ref PublicInstance2
 
   BudgetId:
     Value: !Ref BudgetRashbag

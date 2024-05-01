@@ -301,35 +301,53 @@ Outputs:
   VPCCidrBlock:
     Value: !Ref VPCCidrBlock
     Description: VPC CIDR block
+    Export:
+      Name: VPCCidrBlock
 
   Public1Subnetid:  
     Value: !Ref Public1Subnet
     Description: Public 1 Subnet ID
+    Export:
+      Name: Public1Subnetid
 
   Public2Subnetid:  
     Value: !Ref Public2Subnet
     Description: Public 2 Subnet ID
+    Export:
+      Name: Public2Subnetid
 
   Private1Subnetid:  
     Value: !Ref Private1Subnet
     Description: Private 1 Subnet ID
+    Export:
+      Name: Private1Subnetid
 
   Private2Subnetid:  
     Value: !Ref Private2Subnet
     Description: Private 2 Subnet ID
+    Export:
+      Name: Private2Subnetid
 
   VPCId:
     Value: !Ref VPC
     Description: VPC ID
+    Export:
+      Name: VPCId
 
   PublicSubnetSecurityGroupId:
     Value: !GetAtt PublicSubnetSecurityGroup.GroupId
     Description: Security Group ID for Public Subnet
+    Export:
+      Name: PublicSubnetSecurityGroupId
 
   PrivateSubnetSecurityGroupId:
     Value: !GetAtt PrivateSubnetSecurityGroup.GroupId
     Description: Security Group ID for Private Subnet
+    Export:
+      Name: PrivateSubnetSecurityGroupId
 
   PublicAMIImageSecurityGroupId:
     Value: !GetAtt PublicAMIImageSecurityGroup.GroupId
     Description: Security Group ID for Public AMI Image
+    Export:
+      Name: PublicAMIImageSecurityGroupId
