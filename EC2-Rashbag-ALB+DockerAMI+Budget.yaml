@@ -34,17 +34,19 @@ Parameters:
     Description: ID of the security group to associate with the instance
     Type: AWS::EC2::SecurityGroup::Id
 
-#-------------------------- Resources --------------------------#
+#---------------------------------------------------------------- Resources ----------------------------------------------------------------#
 Resources:
 
-  #________ IAM Roles _________#
+  #_______________________ IAM Roles _______________________#
+  
   # IAM Role for granting EC2 instances full access to S3
   # -----------------------------------------------------
   # This IAM role allows EC2 instances to have full access to
   # S3 resources. The role is assumed by EC2 instances when
   # they are launched.
-  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
-  S3FullAccessRoleForEC2:  # New IAM role definition (assuming not created yet)
+
+  
+  S3FullAccessRoleForEC2:
     Type: 'AWS::IAM::Role'
     Properties:
       RoleName: S3FullAccessRoleForEC2  # Name of the role
@@ -71,7 +73,7 @@ Resources:
                   - '*'  # The resources to which the actions apply
 
   #________ Instance Profile _________#
-  # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+
   # This is an instance profile for EC2 instances that need full S3
   # access. The profile references the S3FullAccessRoleForEC2 IAM role
   # defined earlier in the template.
@@ -92,12 +94,25 @@ Resources:
   # EC2 instances. The ALB listens on port 80 and forwards incoming
   # traffic to the Target Group.
   # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ #
+  
+  # create Load balanser security group
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: LoadBalancer SG
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
   WebServerALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing  # Make the ALB publicly accessible
       SecurityGroups:
-        - !Ref SecurityGroupIdPublic
+        - !GetAtt WebServerSecurityGroup.GroupId
       Subnets:
         - !Ref SubnetIdRashbagWebServer1
         - !Ref SubnetIdRashbagWebServer2
@@ -136,7 +151,8 @@ Resources:
         - !Ref SubnetIdRashbagWebServer1
         - !Ref SubnetIdRashbagWebServer2
       LaunchConfigurationName: !Ref WebServerLaunchConfiguration
-      MinSize: 2  # Launch at least this many instances
+      MinSize: 1  # Launch at least this many instances
+      DesiredCapacity: 2  # Launch exactly this many instances  #### Need To Check!!!!!
       MaxSize: 4  # Launch at most this many instances
       TargetGroupARNs:  # Attach the Target Group to the ASG
         - !Ref WebServerALBTargetGroup
@@ -159,15 +175,20 @@ Resources:
           #!/bin/bash
           # Install the necessary packages and start the web server
           yum update -y
+          yum install htop -y
+          amazon-linux-extras install epel -y
+          yum install stress -y
+          # stress --cpu 8 --timeout 800 &
+          # killall stress
           yum install git -y
           yum install -y httpd
           systemctl start httpd
           systemctl enable httpd
           # Clone the sample app and move its files to the web server root
           cd /var/www/html/
-          git clone "https://github.com/LiorTr/crypto.git"
-          mv -f ./crypto/* .
-          rm -rf crypto
+          git clone "https://github.com/SimonJan2/AWS-Web-Rashbag.git"
+          mv -f ./AWS-Web-Rashbag/* .
+          rm -rf AWS-Web-Rashbag
 
 
   WebServerASGCPUPolicy:
@@ -179,6 +200,8 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: ASGAverageCPUUtilization  # Target 50% CPU utilization
         TargetValue: 50.0
+        # Add a 300 second delay before instances are included in metric calculations
+      #InstanceWarmupPeriod: 120
 
   WebServerASGCPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -192,11 +215,21 @@ Resources:
       Statistic: Average
       Period: 300  # Check CPU utilization every 5 minutes
       EvaluationPeriods: 2  # Check utilization for at least 2 periods
-      Threshold: 80  # If utilization is above 80%, trigger the alarm
+      Threshold: 50  # If utilization is above 50%, trigger the alarm
       ComparisonOperator: GreaterThanThreshold  # Trigger the alarm if above threshold
       AlarmActions:
         - !Ref WebServerASGCPUPolicy  # When the alarm triggers, scale the ASG
   
+  # Add Access to load balancer for the public SG
+  MySecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupIdPublic
+      IpProtocol: "tcp"
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt WebServerSecurityGroup.GroupId # Replace with the ID of the source security group
+
   #________ EC2 Private Instances _________#
   # Private Instance 1: Creates an S3 bucket and uploads a file to it
   PrivateInstance1:
@@ -245,69 +278,69 @@ Resources:
           GroupSet:
             - !Ref SecurityGroupIdPrivate
           SubnetId: !Ref SubnetIdRashbagprivate2
-      # UserData:
-      #   Fn::Base64: !Sub |
-      #     #!/bin/bash
-      #     sudo yum update -y
-      #     sudo yum install -y docker
-      #     sudo service docker start
-      #     sudo systemctl enable docker
-      #     sudo usermod -aG docker ec2-user
-      #     touch Dockerfile
-      #     echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
-
-      #     # Install dependencies
-      #     RUN yum update -y && \
-      #      yum install -y httpd
-          
-      #     # Install apache and write hello world message
-      #     RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
-          
-      #     # Configure apache
-      #     RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
-      #      echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
-      #      echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
-      #      chmod 755 /root/run_apache.sh
-          
-      #     EXPOSE 80
-          
-      #     CMD /root/run_apache.sh" >> Dockerfile    
-      #     docker build -t rashbag-ec2 .
-      #     docker run -d -p 80:80 rashbag-ec2
+#      UserData:
+#        Fn::Base64: !Sub |
+#          #!/bin/bash
+#          sudo yum update -y
+#          sudo yum install -y docker
+#          sudo service docker start
+#          sudo systemctl enable docker
+#          sudo usermod -aG docker ec2-user
+#          touch Dockerfile
+#          echo "FROM public.ecr.aws/amazonlinux/amazonlinux:latest
+#
+#          # Install dependencies
+#          RUN yum update -y && \
+#           yum install -y httpd
+#          
+#          # Install apache and write hello world message
+#          RUN echo 'Hello World From My First Container!' > /var/www/html/index.html
+#          
+#          # Configure apache
+#          RUN echo 'mkdir -p /var/run/httpd' >> /root/run_apache.sh && \
+#           echo 'mkdir -p /var/lock/httpd' >> /root/run_apache.sh && \
+#           echo '/usr/sbin/httpd -D FOREGROUND' >> /root/run_apache.sh && \
+#           chmod 755 /root/run_apache.sh
+#          
+#          EXPOSE 80
+#          
+#          CMD /root/run_apache.sh" >> Dockerfile    
+#          docker build -t rashbag-ec2 .
+#          docker run -d -p 80:80 rashbag-ec2
       Tags:
         - Key: Name
           Value: "Rashbag-private-2" # Add a tag to the instance with the key "Name" and value "Rashbag-private-2"
   
-  # #________ AMIs _________#
-  # # Stop the PrivateInstance2 EC2 instance and create an AMI from it
+  #________ AMIs _________#
+  # Stop the PrivateInstance2 EC2 instance and create an AMI from it
   # StopPrivateInstance2:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
-  #     InstanceState: stopped # The desired state of the EC2 instance
-  #   # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
-  #   DependsOn: PrivateInstance2
+    # Type: AWS::EC2::Instance
+    # Properties:
+      # InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to stop
+      # InstanceState: stopped # The desired state of the EC2 instance
+    # Depends on the PrivateInstance2 Craeation so that the EC2 instance is stopped
+    # DependsOn: PrivateInstance2
 
-  # # Create an AMI from the PrivateInstance2 EC2 instance
+  # Create an AMI from the PrivateInstance2 EC2 instance
   # PrivateInstance2Image:
-  #   Type: AWS::EC2::Image
-  #   Properties:
-  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to create an AMI from
-  #     Name: PrivateInstance2-GoldenImage # The name of the AMI to create
-  #     Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
-  #   # Depends on the StopPrivateInstance2 so that the AMI is created after
-  #   # the EC2 instance is stopped.
-  #   DependsOn: StopPrivateInstance2
+    # Type: AWS::EC2::Image
+    # Properties:
+      # InstanceId: ami-0aa7d40eeae50c9a9 # The ID of the EC2 instance to create an AMI from
+      # Name: PrivateInstance2-GoldenImage # The name of the AMI to create
+      # Description: AMI created from the PrivateInstance2 EC2 instance # A description of the AMI
+    # Depends on the StopPrivateInstance2 so that the AMI is created after
+    # the EC2 instance is stopped.
+    # DependsOn: StopPrivateInstance2
 
-  # # Start the stopped PrivateInstance2 EC2 instance
+  # Start the stopped PrivateInstance2 EC2 instance
   # StartPrivateInstance2:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
-  #     InstanceState: running # The desired state of the EC2 instance
-  #   # Depends on the PrivateInstance2Image so that the EC2 instance is started
-  #   # after the AMI is created.
-  #   DependsOn: PrivateInstance2Image
+    # Type: AWS::EC2::Instance
+    # Properties:
+      # InstanceId: !Ref PrivateInstance2 # The ID of the EC2 instance to start
+      # InstanceState: running # The desired state of the EC2 instance
+    # Depends on the PrivateInstance2Image so that the EC2 instance is started
+    # after the AMI is created.
+    # DependsOn: PrivateInstance2Image
 
 #---------------Budget------------------#
 # This section defines a budget for the AWS resources used by this CloudFormation stack.
@@ -315,17 +348,13 @@ Resources:
     Type: "AWS::Budgets::Budget"
     Properties:
       Budget:
+        BudgetName: "Rashbag-budget"
         # Set the budget limit to $10 per month
         BudgetLimit:
           Amount: 10
           Unit: USD
         # Set the budget time period to monthly
         TimeUnit: MONTHLY
-        # Set the start time of the budget to the current time when the stack is created/updated
-        # TimePeriod:
-        #   Start: 1225864800
-        #   # Set the end time of the budget to one year from the current time
-        #   End: 1926864800
         # Set the budget type to track costs
         BudgetType: COST
       # Define the notifications to be sent when the budget thresholds are exceeded
@@ -361,7 +390,7 @@ Resources:
             - SubscriptionType: EMAIL
               Address: simonjan2@hotmail.com
 
-#-------------------------- Outputs --------------------------#
+#---------------------------------------------------------------- Outputs ----------------------------------------------------------------#
 # Outputs
 # The values of these outputs are available in the "outputs" object of the
 # AWS CloudFormation template's response.
