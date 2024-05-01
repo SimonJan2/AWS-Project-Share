@@ -33,6 +33,10 @@ Parameters:
   SecurityGroupIdPrivate:
     Description: ID of the security group to associate with the instance
     Type: AWS::EC2::SecurityGroup::Id
+  
+  SecurityGroupIdAMIImage:
+    Description: ID of the security group to associate with the instance
+    Type: AWS::EC2::SecurityGroup::Id
 
 #---------------------------------------------------------------- Resources ----------------------------------------------------------------#
 Resources:
@@ -222,7 +226,7 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity # Increase by 2 instances
       AutoScalingGroupName: !Ref WebServerASG # Name of the ASG
-      Cooldown: 180 # Adjust based on your scaling needs
+      Cooldown: 60 # Adjust based on your scaling needs
       ScalingAdjustment: 2 # Increase by 2 instances
 
   RashbagScaleDownPolicy:
@@ -322,7 +326,7 @@ Resources:
         - AssociatePublicIpAddress: "true" # Launch in a public subnet
           DeviceIndex: "0" # eth0
           GroupSet:
-            - !Ref SecurityGroupIdPublic # Allow traffic from the public subnet
+            - !Ref SecurityGroupIdAMIImage # Allow traffic from the public subnet
           SubnetId: !Ref SubnetIdRashbagWebServer2
       UserData:
         Fn::Base64: !Sub |

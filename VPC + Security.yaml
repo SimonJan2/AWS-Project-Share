@@ -203,14 +203,6 @@ Resources:
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80 # HTTP
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443 # HTTPS
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
           FromPort: 22
           ToPort: 22 # SSH
         - CidrIp: 0.0.0.0/0
@@ -235,10 +227,6 @@ Resources:
         ToPort: 80 # HTTP
       - CidrIp: 0.0.0.0/0
         IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443 # HTTPS
-      - CidrIp: 0.0.0.0/0
-        IpProtocol: tcp
         FromPort: 22
         ToPort: 22 # SSH
       - CidrIp: 0.0.0.0/0
@@ -248,7 +236,30 @@ Resources:
       Tags:
         - Key: Name
           Value: PrivateSubnetSecurityGroup # Name tag for the security group
-      
+  
+  # Security Group for Golden Image AMI in Public Subnet
+  PublicAMIImageSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Golden Image AMI in Public Subnet
+      VpcId: !Ref VPC
+      GroupName: PublicAMIImageSecurityGroup # Name for the security group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22 # SSH
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1 # ICMP (ping)
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80 # HTTP
+      Tags:
+        - Key: Name
+          Value: PublicAMIImageSecurityGroup # Name tag for the security group
 
 #------------------------- Endpoints -------------------------#
 
@@ -284,13 +295,41 @@ Resources:
           Value: MyInstanceConnectEndpoint
 
 
+#------------------------- Outputs -------------------------#
 
+Outputs:
+  VPCCidrBlock:
+    Value: !Ref VPCCidrBlock
+    Description: VPC CIDR block
 
+  Public1Subnetid:  
+    Value: !Ref Public1Subnet
+    Description: Public 1 Subnet ID
 
+  Public2Subnetid:  
+    Value: !Ref Public2Subnet
+    Description: Public 2 Subnet ID
 
-# add name of AWS Service endpoint to S3 is "com.amazonaws.us-east-1.s3" as gateway
-# add EC2 instance connect Endpoint
+  Private1Subnetid:  
+    Value: !Ref Private1Subnet
+    Description: Private 1 Subnet ID
 
+  Private2Subnetid:  
+    Value: !Ref Private2Subnet
+    Description: Private 2 Subnet ID
 
+  VPCId:
+    Value: !Ref VPC
+    Description: VPC ID
 
+  PublicSubnetSecurityGroupId:
+    Value: !GetAtt PublicSubnetSecurityGroup.GroupId
+    Description: Security Group ID for Public Subnet
 
+  PrivateSubnetSecurityGroupId:
+    Value: !GetAtt PrivateSubnetSecurityGroup.GroupId
+    Description: Security Group ID for Private Subnet
+
+  PublicAMIImageSecurityGroupId:
+    Value: !GetAtt PublicAMIImageSecurityGroup.GroupId
+    Description: Security Group ID for Public AMI Image
