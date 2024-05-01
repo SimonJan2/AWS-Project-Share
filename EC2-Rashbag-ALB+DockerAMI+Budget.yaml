@@ -299,7 +299,7 @@ Resources:
           #!/bin/bash
           # Create a new S3 bucket
           # The bucket name is "rashbag-ec2"
-          BUCKET_NAME="rashbag-ec2"
+          BUCKET_NAME="rashbag-ec2-private-1"
 
           # Documentation: https://docs.aws.amazon.com/cli/latest/reference/s3/mb.html
           aws s3 mb s3://$BUCKET_NAME
