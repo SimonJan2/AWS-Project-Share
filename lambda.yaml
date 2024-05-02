@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: An AWS Serverless Application Model template describing your function.
+
+# Parameters:
+#   S3BucketArn:
+#     Type: String
+#     Description: arn:aws:s3:::rashbag-s3-source
+
+Resources:
+  Resizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://rashbag-ec2/function (1).zip  # Updated CodeUri with S3 location
+      Description: ''
+      MemorySize: 128
+      Timeout: 3
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      EphemeralStorage:
+        Size: 512
+      Environment:
+        Variables:
+          DEST_BUCKET: rashbags3dst
+  # # Add a new resource for the S3 bucket (if needed)
+  # MyS3Bucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+    
+  #     # ... (S3 bucket properties)
+
+  # Add the S3 trigger for the function
+  S3Trigger:
+    Type: AWS::Serverless::EventSource
+    Properties:
+      EventSourceArn: !ImportValue  arn:aws:s3:::rashbags3src  # Replace with actual bucket ARN
+      FunctionArn: !Ref resizwer
+      BatchSize: 1  # Optional: Number of events delivered per invocation
+      # You can add filtering for specific events using "FilterPolicy" property
+
