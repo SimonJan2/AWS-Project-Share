@@ -54,3 +54,15 @@ Outputs: # Corrected Section Name
     Description: The ARN of the S3 bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3BucketSrcARN'
+
+  S3BucketDstName:
+    Value: !Ref S3BucketDstName
+    Description: The name of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDstName'
+  
+  S3BucketSrcName:
+    Value: !Ref S3BucketSrcName
+    Description: The name of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketSrcName'
