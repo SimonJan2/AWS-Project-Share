@@ -5,38 +5,52 @@ Description: Launch an EC2 instance in the free tier
 
 Parameters:
 #------------------------ Parameters --------------------------#
-  S3BucketName1:
+  S3BucketDstName:
     Description: Name for the S3 bucket
     Type: String
-    Default: rashbags3source
+    Default: rashbags3src
 
-  S3BucketName2:
+  S3BucketSrcName:
     Description: Name for the S3 bucket
     Type: String
-    Default: rashbags3destination
+    Default: rashbags3dst
 
 Resources:
 # ---- S3 Buckets ----- #
-  RashbagS3Source1:
+  S3BucketDst:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Ref S3BucketName1
+      BucketName: !Ref S3BucketDstName
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
 
-  RashbagS3Source2:
+  S3BucketSrc:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Ref S3BucketName2
+      BucketName: !Ref S3BucketSrcName
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+
+Outputs: # Corrected Section Name
+#------------------------ Outputs --------------------------#
+  S3BucketDstARN:
+    Value: !GetAtt S3BucketDst.Arn  # Use 'Arn' instead of 'ARN'
+    Description: The ARN of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDstARN'
+
+  S3BucketSrcARN:
+    Value: !GetAtt S3BucketSrc.Arn  # Use 'Arn' instead of 'ARN'
+    Description: The ARN of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketSrcARN'
