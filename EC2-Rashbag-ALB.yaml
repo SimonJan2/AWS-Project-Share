@@ -110,7 +110,7 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-      Tags: #Test - Need to Check!!!!!
+      Tags:
         - Key: Name
           Value: WebServerSecurityGroup # name of the security group
 
@@ -124,7 +124,7 @@ Resources:
       Subnets:
         - !ImportValue Public1Subnetid   #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
         - !ImportValue Public2Subnetid   #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
-      LoadBalancerAttributes: #Test - Need to Check!!!!!
+      LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds # Idle timeout for the ALB
           Value: '60'
 
@@ -247,7 +247,7 @@ Resources:
         - Name: AutoScalingGroupName # Name of the ASG
           Value: !Ref WebServerASG # Name of the ASG
       Statistic: Average # Use the average statistic
-      Period: 60 # 1 minute
+      Period: 300 # 5 minutes (Free tier)
       EvaluationPeriods: 1 # 1 minute
       Threshold: 40 # 40%
       ComparisonOperator: GreaterThanThreshold # Scale up if CPU utilization is greater than 40%
@@ -263,7 +263,7 @@ Resources:
         - Name: AutoScalingGroupName # Name of the ASG
           Value: !Ref WebServerASG # Name of the ASG
       Statistic: Average # Use the average statistic
-      Period: 180 # 3 minute
+      Period: 300 # set to 5 minutes (Free tier)
       EvaluationPeriods: 1 # 1 minute
       Threshold: 20 # 20%
       ComparisonOperator: LessThanThreshold # Scale down if CPU utilization is less than 20%
@@ -366,7 +366,7 @@ Resources:
           docker run -d --name rashbag -p 80:80 -v /home/ec2-user/Ecommerce-Website:/var/www/html/ rashbag-ec2
       Tags:
         - Key: Name
-          Value: "Rashbag-public-2" # Add a tag to the instance with the key "Name" and value "Rashbag-public-2"
+          Value: "Rashbag-Docker-For-AMI" # Add a tag to the instance with the key "Name" and value "Rashbag-Docker-For-AMI"
 
 #---------------Budget------------------#
 # This section defines a budget for the AWS resources used by this CloudFormation stack.
