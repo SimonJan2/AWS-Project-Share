@@ -8,10 +8,12 @@ Parameters:
   S3BucketName1:
     Description: Name for the S3 bucket
     Type: String
+    Default: rashbags3source
 
   S3BucketName2:
     Description: Name for the S3 bucket
-    Type: String  
+    Type: String
+    Default: rashbags3destination
 
 Resources:
   RashbagS3Source1:
