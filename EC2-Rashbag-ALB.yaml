@@ -6,38 +6,6 @@ Parameters:
     Description: Name of an existing EC2 key pair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
   
-  # VpcId:
-  #   Description: ID of the VPC where the instance should be launched
-  #   Type: AWS::EC2::VPC::Id
-  
-  # SubnetIdRashbagWebServer1:
-  #   Description: ID of the public subnet where the instance should be launched
-  #   Type: AWS::EC2::Subnet::Id
-  
-  # SubnetIdRashbagWebServer2:
-  #   Description: ID of the public subnet where the instance should be launched
-  #   Type: AWS::EC2::Subnet::Id
-
-  # SubnetIdRashbagprivate1:
-  #   Description: ID of the private subnet where the instance should be launched
-  #   Type: AWS::EC2::Subnet::Id  
-  
-  # SubnetIdRashbagprivate2:
-  #   Description: ID of the private subnet where the instance should be launched
-  #   Type: AWS::EC2::Subnet::Id
-  
-  # SecurityGroupIdPublic:
-  #   Description: ID of the security group to associate with the instance
-  #   Type: AWS::EC2::SecurityGroup::Id
-
-  # SecurityGroupIdPrivate:
-  #   Description: ID of the security group to associate with the instance
-  #   Type: AWS::EC2::SecurityGroup::Id
-  
-  # SecurityGroupIdAMIImage:
-  #   Description: ID of the security group to associate with the instance
-  #   Type: AWS::EC2::SecurityGroup::Id
-
 #---------------------------------------------------------------- Resources ----------------------------------------------------------------#
 Resources:
 
@@ -146,11 +114,11 @@ Resources:
       Protocol: HTTP
       TargetType: instance  # Targets are EC2 instances
       VpcId: !ImportValue VPCId #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
-      HealthCheckProtocol: HTTP  #Test - Need to Check!!!!!
-      HealthCheckIntervalSeconds: 30  #Test - Need to Check!!!!!
-      HealthCheckTimeoutSeconds: 5  #Test - Need to Check!!!!!
-      HealthyThresholdCount: 2  #Test - Need to Check!!!!!
-      UnhealthyThresholdCount: 2  #Test - Need to Check!!!!!
+      HealthCheckProtocol: HTTP 
+      HealthCheckIntervalSeconds: 30 
+      HealthCheckTimeoutSeconds: 5  
+      HealthyThresholdCount: 2  
+      UnhealthyThresholdCount: 2  
 
   # Auto Scaling Group Resources
   # ----------------------------------- #
@@ -167,8 +135,8 @@ Resources:
         - !ImportValue Public1Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
         - !ImportValue Public2Subnetid #↓↓→↑↑→↓↓→↑↑→↓↓ Output ↑↑→↓↓→↑↑→↓↓→↑↑#
       LaunchConfigurationName: !Ref WebServerLaunchConfiguration
-      MinSize: 1  # Launch at least this many instances
-      DesiredCapacity: 2  # Launch exactly this many instances  #Test - Need to Check!!!!!
+      MinSize: 2  # Launch at least this many instances
+      DesiredCapacity: 2  # Launch exactly this many instances 
       MaxSize: 4  # Launch at most this many instances
       TargetGroupARNs:  # Attach the Target Group to the ASG
         - !Ref WebServerALBTargetGroup
