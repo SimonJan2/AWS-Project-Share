@@ -1,10 +1,10 @@
 #---------------S3------------------#
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch an EC2 instance in the free tier
+
 
 Parameters:
-  # EnvironmentName:
-  #   Description: Production DevSecOps
-  #   Type: String
-
+#------------------------ Parameters --------------------------#
   S3BucketName1:
     Description: Name for the S3 bucket
     Type: String
@@ -16,6 +16,7 @@ Parameters:
     Default: rashbags3destination
 
 Resources:
+# ---- S3 Buckets ----- #
   RashbagS3Source1:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
