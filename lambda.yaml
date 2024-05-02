@@ -23,7 +23,7 @@ Resources:
         Size: 512
       Environment:
         Variables:
-          DEST_BUCKET: rashbags3dst
+          DEST_BUCKET: !ImportValue Rashbag-S3-S3BucketDstName
   # # Add a new resource for the S3 bucket (if needed)
   # MyS3Bucket:
   #   Type: AWS::S3::Bucket
@@ -35,8 +35,8 @@ Resources:
   S3Trigger:
     Type: AWS::Serverless::EventSource
     Properties:
-      EventSourceArn: !ImportValue  arn:aws:s3:::rashbags3src  # Replace with actual bucket ARN
-      FunctionArn: !Ref resizwer
+      EventSourceArn: !ImportValue Rashbag-S3-S3BucketSrcARN  # Replace with actual bucket ARN
+      FunctionArn: !Ref Resizer
       BatchSize: 1  # Optional: Number of events delivered per invocation
       # You can add filtering for specific events using "FilterPolicy" property
 
