@@ -2,16 +2,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: An AWS Serverless Application Model template describing your function.
 
-# Parameters:
-#   S3BucketArn:
-#     Type: String
-#     Description: arn:aws:s3:::rashbag-s3-source
-
 Resources:
   Resizer:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://rashbag-ec2/function (1).zip  # Updated CodeUri with S3 location
+      CodeUri: s3://resizer-function/function.zip  # Updated CodeUri with S3 location
       Description: ''
       MemorySize: 128
       Timeout: 3
