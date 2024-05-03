@@ -1,0 +1,130 @@
+#---------------S3------------------#
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch an EC2 instance in the free tier
+
+
+Parameters:
+#------------------------ Parameters --------------------------#
+  S3BucketDstName:
+    Description: Name for the S3 bucket
+    Type: String
+    Default: rashbags-s3-dst
+
+  S3BucketSrcName:
+    Description: Name for the S3 bucket
+    Type: String
+    Default: rashbag-s3-src
+
+  LambdaCodeS3Bucket:
+    Description: Name of the S3 bucket containing the Lambda deployment package
+    Type: String
+    Default: resizer-function
+
+  LambdaCodeS3Key:  
+    Description: S3 key for the Lambda deployment package 
+    Type: String  
+    Default: function.zip
+
+  LambdaRoleArn:
+    Description: ARN of the IAM role for the Lambda function
+    Type: String
+    Default: arn:aws:iam::992382501873:role/S3FullAccessRoleLambda
+
+#------------------------ Resources --------------------------#
+Resources:
+# ------------ S3 Buckets ------------- #
+  S3BucketDst:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref S3BucketDstName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  S3BucketSrc:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref S3BucketSrcName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+# ------------ Lambda Function ------------- #
+  ResizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: Resizer  # Name of the Lambda function
+      Handler: index.handler  
+      Runtime: nodejs20.x
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
+      Role: !Ref LambdaRoleArn
+      Environment:
+        Variables:
+          DEST_BUCKET: !Ref S3BucketDstName
+      Timeout: 30
+
+  S3Trigger:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ResizerFunction
+      Principal: s3.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Join
+        - ''  
+        - - 'arn:aws:s3:::'
+          - !Ref S3BucketSrcName
+          - '/*'
+
+  S3EventConfig:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketSrcName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ResizerFunction.Arn
+
+
+
+Outputs: # Corrected Section Name
+#------------------------ Outputs --------------------------#
+  S3BucketDstARN:
+    Value: !GetAtt S3BucketDst.Arn  # Use 'Arn' instead of 'ARN'
+    Description: The ARN of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDstARN'
+
+  S3BucketSrcARN:
+    Value: !GetAtt S3BucketSrc.Arn  # Use 'Arn' instead of 'ARN'
+    Description: The ARN of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketSrcARN'
+
+  S3BucketDstName:
+    Value: !Ref S3BucketDstName
+    Description: The name of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDstName'
+  
+  S3BucketSrcName:
+    Value: !Ref S3BucketSrcName
+    Description: The name of the S3 bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketSrcName'
+
+  ResizerFunctionArn:
+    Value: !GetAtt ResizerFunction.Arn
+    Description: The ARN of the Lambda function
+    Export:
+      Name: !Sub '${AWS::StackName}-ResizerFunctionArn'

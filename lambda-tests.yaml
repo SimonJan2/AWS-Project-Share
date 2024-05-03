@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for a Lambda function triggered by S3
+
+#-------------------------- Parameters --------------------------#
+Parameters:
+  # Need to Create a S3 bucket for Lambda function and Upload the function.zip file to the bucket
+  LambdaCodeS3Bucket:
+    Description: Name of the S3 bucket containing the Lambda deployment package
+    Type: String
+    AllowedValues:
+      - resizer-function
+      - rashbag-s3-src
+      - rashbag-s3-dst
+    Default: resizer-function
+
+  LambdaCodeS3Key:  
+    Description: S3 key for the Lambda deployment package 
+    Type: String  
+    AllowedValues:
+      - function.zip
+    Default: function.zip
+
+#-------------------------- Resources --------------------------#
+Resources:
+
+  ResizerFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !ImportValue S3FullAccessRoleForLambdaARN
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket # S3 bucket where your Lambda function code is stored
+        S3Key: !Ref LambdaCodeS3Key    # Name of the zip file containing your Lambda function code
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          DEST_BUCKET: !ImportValue Rashbag-S3-S3BucketDstName
+      Timeout: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ResizerFunction'
+
+  ResizerPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt ResizerFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !ImportValue Rashbag-S3-S3BucketSrcARN
+
+#------------------------ Outputs --------------------------#
+Outputs:
+  ResizerFunctionArn:
+    Value: !GetAtt ResizerFunction.Arn
+    Description: The ARN of the Lambda function
+    Export:
+      Name: !Sub '${AWS::StackName}-ResizerFunctionArn'

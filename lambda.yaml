@@ -19,19 +19,12 @@ Resources:
       Environment:
         Variables:
           DEST_BUCKET: !ImportValue Rashbag-S3-S3BucketDstName
-  # # Add a new resource for the S3 bucket (if needed)
-  # MyS3Bucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-    
-  #     # ... (S3 bucket properties)
+      Role: arn:aws:iam::992382501873:role/S3FullAccessRoleLambda
 
-  # Add the S3 trigger for the function
   S3Trigger:
-    Type: AWS::Serverless::EventSource
+    Type: AWS::Lambda::EventSourceMapping
     Properties:
       EventSourceArn: !ImportValue Rashbag-S3-S3BucketSrcARN  # Replace with actual bucket ARN
-      FunctionArn: !Ref Resizer
+      FunctionName: !GetAtt Resizer.Arn  # ARN of Resizer
       BatchSize: 1  # Optional: Number of events delivered per invocation
       # You can add filtering for specific events using "FilterPolicy" property
-
